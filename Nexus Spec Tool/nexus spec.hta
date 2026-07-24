@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Nexus System Spec Tool</title>
+    <hta:application 
+        id="nexusSpec"
+        border="thick"
+        borderStyle="normal"
+        caption="yes"
+        maximizeButton="no"
+        minimizeButton="yes"
+        sysMenu="yes"
+        windowState="normal"
+        scroll="no"
+    />
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e24;
+            color: #f5f5f5;
+            margin: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #00adb5;
+            font-size: 22px;
+            margin-bottom: 5px;
+        }
+        p {
+            color: #eeeeee;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        .btn {
+            background-color: #00adb5;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .btn:hover {
+            background-color: #007a80;
+        }
+        #output {
+            margin-top: 20px;
+            background-color: #222831;
+            border: 1px solid #393e46;
+            border-radius: 5px;
+            padding: 15px;
+            text-align: left;
+            font-family: monospace;
+            font-size: 13px;
+            height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+
+    <script language="VBScript">
+        Sub Window_OnLoad
+            window.resizeTo 600, 600
+        End Sub
+
+        Function CleanOutput(strText)
+            Dim lines, line, result
+            lines = Split(strText, vbCrLf)
+            result = ""
+            For Each line In lines
+                If Trim(line) <> "" Then
+                    result = result & Trim(line) & vbCrLf
+                End If
+            Next
+            CleanOutput = Trim(result)
+        End Function
+
+        Sub ScanHardware
+            document.getElementById("output").innerHTML = "Scanning components... Please wait a few seconds..."
+            
+            Set objShell = CreateObject("WScript.Shell")
+            
+            ' 1. CPU
+            Set objExec = objShell.Exec("wmic cpu get name")
+            strCPU = CleanOutput(Replace(objExec.StdOut.ReadAll, "Name", ""))
+            
+            ' 2. Motherboard
+            Set objExec = objShell.Exec("wmic baseboard get manufacturer, product")
+            strBase = CleanOutput(Replace(Replace(objExec.StdOut.ReadAll, "Manufacturer", ""), "Product", ""))
+            strBase = Replace(strBase, vbCrLf, " ")
+
+            ' 3. GPU
+            Set objExec = objShell.Exec("wmic path win32_VideoController get name")
+            strGPU = CleanOutput(Replace(objExec.StdOut.ReadAll, "Name", ""))
+
+            ' 4. RAM (Somma i GB di tutti i banchi e rileva la velocità massima)
+            Set objExec = objShell.Exec("powershell -NoProfile -Command ""$m=Get-CimInstance Win32_PhysicalMemory; $totalGB=0; $speed=0; $smbios=0; foreach($b in $m){ $totalGB += $b.Capacity/1GB; if($b.ConfiguredClockSpeed -gt $speed){$speed=$b.ConfiguredClockSpeed}; $smbios=$b.SMBIOSMemoryType }; $type='Unknown'; if($smbios -eq 24){$type='DDR3'} elseif($smbios -eq 26){$type='DDR4'} elseif($speed -gt 4000){$type='DDR5'} elseif($speed -gt 2000){$type='DDR4'} else {$type='DDR3'}; Write-Output ('Total: ' + [Math]::Round($totalGB).ToString() + ' GB ' + $type + ' @ ' + $speed.ToString() + 'MHz')"" ")
+            strRAM = CleanOutput(objExec.StdOut.ReadAll)
+
+            ' 5. DISCHI
+            Set objExec = objShell.Exec("powershell -NoProfile -Command ""Get-PhysicalDisk | Foreach-Object { $_.FriendlyName + ' (' + $_.MediaType + ') - ' + [Math]::Round($_.Size / 1GB).ToString() + ' GB' }""")
+            strDisks = CleanOutput(objExec.StdOut.ReadAll)
+
+            ' Composizione finale super ordinata
+            strFinal = "=== PROCESSOR ===" & vbCrLf & strCPU & vbCrLf & vbCrLf & _
+                       "=== MOTHERBOARD ===" & vbCrLf & strBase & vbCrLf & vbCrLf & _
+                       "=== GRAPHICS CARD ===" & vbCrLf & strGPU & vbCrLf & vbCrLf & _
+                       "=== RAM MEMORY ===" & vbCrLf & strRAM & vbCrLf & vbCrLf & _
+                       "=== STORAGE (DISKS) ===" & vbCrLf & strDisks
+                       
+            document.getElementById("output").innerHTML = strFinal
+        End Sub
+    </script>
+</head>
+<body>
+
+    <h1>NEXUS SYSTEM SPEC TOOL</h1>
+    <p>Click the button below to scan all hardware components.</p>
+    
+    <button class="btn" onclick="ScanHardware()">SCAN SYSTEM</button>
+    
+    <div id="output">Hardware specifications will appear here...</div>
+
+</body>
+</html>
